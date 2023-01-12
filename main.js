@@ -1,17 +1,17 @@
 'use strict';
 
-let gl;                         // The webgl context.
-let surface;                    // A surface model
-let shProgram;                  // A shader program
-let spaceball;                  // A SimpleRotator object that lets the user rotate the view by mouse.
+let gl; // The webgl context.
+let surface; // A surface model
+let shProgram; // A shader program
+let spaceball; // A SimpleRotator object that lets the user rotate the view by mouse.
 
-function deg2rad(angle) {
-    return angle * Math.PI / 180;
+function GetRadiansFromDegree(angle) {
+  return (angle * Math.PI) / 180;
 }
-
 
 // Constructor
 function Model(name) {
+
     this.name = name;
     this.iVertexBuffer = gl.createBuffer();
     this.iNormalBuffer = gl.createBuffer();
@@ -19,8 +19,16 @@ function Model(name) {
 
     this.BufferData = function (vertices) {
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STREAM_DRAW);
+  this.name = name;
+  this.iVertexBuffer = gl.createBuffer();
+  this.iNormalBuffer = gl.createBuffer();
+  this.count = 0;
+
+
+  this.BufferData = function (vertices) {
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STREAM_DRAW);
+
 
         this.count = vertices.length / 3;
     }
@@ -45,11 +53,27 @@ function Model(name) {
 
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.count);
     }
-}
 
+    this.count = vertices.length / 3;
+  };
+    this.NormalBufferData = function (normals) {
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iNormalBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STREAM_DRAW);
+
+        this.count = normals.length / 3;
+    }
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.iNormalBuffer);
+        gl.vertexAttribPointer(shProgram.iAttribNormal, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(shProgram.iAttribNormal);
+
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, this.count);
+
+}
 
 // Constructor
 function ShaderProgram(name, program) {
+
 
     this.name = name;
     this.prog = program;
@@ -67,14 +91,32 @@ function ShaderProgram(name, program) {
     this.Use = function () {
         gl.useProgram(this.prog);
     }
+
+  this.name = name;
+    this.prog = program;
+
+    // Location of the attribute variable in the shader program.
+    this.iAttribVertex = -1;
+    this.iAttribNormal = -1;
+    // Location of the uniform specifying a color for the primitive.
+    this.iColor = -1;
+    this.iLightDir = -1;
+    // Location of the uniform matrix representing the combined transformation.
+    this.iModelViewProjectionMatrix = -1;
+    this.iNormalMatrix = -1;
+
+    this.Use = function () {
+        gl.useProgram(this.prog);
+    }
+
 }
 
-
-/* Draws a colored cube, along with a set of coordinate axes.
+/*Draws a colored cube, along with a set of coordinate axes.
  * (Note that the use of the above drawPrimitive function is not an efficient
  * way to draw with WebGL.  Here, the geometry is so simple that it doesn't matter.)
  */
 function draw() {
+
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -107,8 +149,42 @@ function draw() {
     gl.uniform4fv(shProgram.iColor, [1, 1, 0, 1]);
     gl.uniform3fv(shProgram.iLightDir, [-10 + 20 * Math.cos(Date.now() * 0.001), 2, 2]);
 
-    surface.Draw();
-}
+ gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    /* Set the values of the projection transformation */
+    let projection = m4.perspective(Math.PI / 8, 1, 8, 12);
+
+    /* Get the view matrix from the SimpleRotator object.*/
+    let modelView = spaceball.getViewMatrix();
+
+    let rotateToPointZero = m4.axisRotation([0.707, 0.707, 0], 0.7);
+    let translateToPointZero = m4.translation(0, 0, -10);
+
+    let matAccum0 = m4.multiply(rotateToPointZero, modelView);
+    let matAccum1 = m4.multiply(translateToPointZero, matAccum0);
+
+    /* Multiply the projection matrix times the modelview matrix to give the
+       combined transformation matrix, and send that to the shader program. */
+    let modelViewProjection = m4.multiply(projection, matAccum1);
+
+    gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection);
+
+    let modelviewInv = new Float32Array(16);
+    let normalmatrix = new Float32Array(16);
+    mat4Invert(modelViewProjection, modelviewInv);
+    mat4Transpose(modelviewInv, normalmatrix);
+
+    gl.uniformMatrix4fv(shProgram.iNormalMatrix, false, normalmatrix);
+
+    /* Draw the six faces of a cube, with different colors. */
+    gl.uniform4fv(shProgram.iColor, [1, 1, 0, 1]);
+    gl.uniform3fv(shProgram.iLightDir, [-10 + 20 * Math.cos(Date.now() * 0.001), 2, 2]);
+
+
+  /* Draw the six faces of a cube, with different colors. */
+  gl.uniform4fv(shProgram.iColor, [0.3, 0, 1, 1]);
+
 
 function anim() {
     draw()
@@ -140,9 +216,42 @@ function CreateSurfaceData() {
             vertexList.push(cvert.x, cvert.y, cvert.z)
             vertexList.push(bvert.x, bvert.y, bvert.z)
         }
-    }
 
-    return vertexList;
+function anim() {
+    draw()
+    window.requestAnimationFrame(anim)
+}
+
+function CreateSurfaceData() {
+    let vertexList = [];
+
+    let u = 0;
+    let v = 0;
+    let uMax = Math.PI * 2
+    let vMax = Math.PI * 2
+    let uStep = uMax / 50;
+    let vStep = vMax / 50;
+
+    for (let u = 0; u <= uMax; u += uStep) {
+        for (let v = 0; v <= vMax; v += vStep) {
+            let vert = Cornucopia(u, v)
+            let avert = Cornucopia(u + uStep, v)
+            let bvert = Cornucopia(u, v + vStep)
+            let cvert = Cornucopia(u + uStep, v + vStep)
+
+            vertexList.push(vert.x, vert.y, vert.z)
+            vertexList.push(avert.x, avert.y, avert.z)
+            vertexList.push(bvert.x, bvert.y, bvert.z)
+
+            vertexList.push(avert.x, avert.y, avert.z)
+            vertexList.push(cvert.x, cvert.y, cvert.z)
+            vertexList.push(bvert.x, bvert.y, bvert.z)
+        }
+
+    }
+  }
+
+  return vertexList;
 }
 function CreateNormals() {
     let normals = [];
@@ -202,13 +311,17 @@ function Cornucopia(u, v) {
     return { x: x * k, y: y * k, z: z * k }
 }
 
-
 /* Initialize the WebGL context. Called from init() */
 function initGL() {
-    let prog = createProgram(gl, vertexShaderSource, fragmentShaderSource);
 
-    shProgram = new ShaderProgram('Basic', prog);
-    shProgram.Use();
+  let prog = createProgram(gl, vertexShaderSource, fragmentShaderSource);
+
+  let prog = createProgram(gl, vertexShaderSource, fragmentShaderSource);
+
+
+  shProgram = new ShaderProgram('Basic', prog);
+  shProgram.Use();
+
 
     shProgram.iAttribVertex = gl.getAttribLocation(prog, "vertex");
     shProgram.iAttribNormal = gl.getAttribLocation(prog, "normal");
@@ -221,9 +334,20 @@ function initGL() {
     surface.BufferData(CreateSurfaceData());
     surface.NormalBufferData(CreateNormals());
 
-    gl.enable(gl.DEPTH_TEST);
-}
+    shProgram.iAttribVertex = gl.getAttribLocation(prog, "vertex");
+    shProgram.iAttribNormal = gl.getAttribLocation(prog, "normal");
+    shProgram.iModelViewProjectionMatrix = gl.getUniformLocation(prog, "ModelViewProjectionMatrix");
+    shProgram.iNormalMatrix = gl.getUniformLocation(prog, "NormalMatrix");
+    shProgram.iColor = gl.getUniformLocation(prog, "color");
+    shProgram.iLightDir = gl.getUniformLocation(prog, "lightDir");
 
+    surface = new Model('Surface');
+    surface.BufferData(CreateSurfaceData());
+    surface.NormalBufferData(CreateNormals());
+
+
+  gl.enable(gl.DEPTH_TEST);
+}
 
 /* Creates a program for use in the WebGL context gl, and returns the
  * identifier for that program.  If an error occurs while compiling or
@@ -234,6 +358,7 @@ function initGL() {
  * source code for the vertex shader and for the fragment shader.
  */
 function createProgram(gl, vShader, fShader) {
+
     let vsh = gl.createShader(gl.VERTEX_SHADER);
     gl.shaderSource(vsh, vShader);
     gl.compileShader(vsh);
@@ -254,13 +379,35 @@ function createProgram(gl, vShader, fShader) {
         throw new Error("Link error in program:  " + gl.getProgramInfoLog(prog));
     }
     return prog;
-}
 
+ let vsh = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vsh, vShader);
+    gl.compileShader(vsh);
+    if (!gl.getShaderParameter(vsh, gl.COMPILE_STATUS)) {
+        throw new Error("Error in vertex shader:  " + gl.getShaderInfoLog(vsh));
+    }
+    let fsh = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fsh, fShader);
+    gl.compileShader(fsh);
+    if (!gl.getShaderParameter(fsh, gl.COMPILE_STATUS)) {
+        throw new Error("Error in fragment shader:  " + gl.getShaderInfoLog(fsh));
+    }
+    let prog = gl.createProgram();
+    gl.attachShader(prog, vsh);
+    gl.attachShader(prog, fsh);
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+        throw new Error("Link error in program:  " + gl.getProgramInfoLog(prog));
+    }
+    return prog;
+
+}
 
 /**
  * initialization function that will be called when the page has loaded
  */
 function init() {
+
     let canvas;
     try {
         canvas = document.getElementById("webglcanvas");
@@ -286,6 +433,33 @@ function init() {
     spaceball = new TrackballRotator(canvas, draw, 0);
 
     window.requestAnimationFrame(anim);
+
+  let canvas;
+    try {
+        canvas = document.getElementById("webglcanvas");
+        gl = canvas.getContext("webgl");
+        if (!gl) {
+            throw "Browser does not support WebGL";
+        }
+    }
+    catch (e) {
+        document.getElementById("canvas-holder").innerHTML =
+            "<p>Sorry, could not get a WebGL graphics context.</p>";
+        return;
+    }
+    try {
+        initGL();  // initialize the WebGL graphics context
+    }
+    catch (e) {
+        document.getElementById("canvas-holder").innerHTML =
+            "<p>Sorry, could not initialize the WebGL graphics context: " + e + "</p>";
+        return;
+    }
+
+    spaceball = new TrackballRotator(canvas, draw, 0);
+
+    window.requestAnimationFrame(anim);
+
 }
 
 function mat4Transpose(a, transposed) {
